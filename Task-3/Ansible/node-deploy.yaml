@@ -1,0 +1,74 @@
+- hosts: localhost
+  become: yes
+  tasks:
+
+- hosts: lemp
+  become: yes
+  vars_files:
+   - node-variable.yaml
+  tasks:
+
+    - name: update cache
+      ansible.builtin.apt: 
+        update_cache: true
+
+    - name: Add NodeSource repository
+      ansible.builtin.apt_repository:
+        repo: deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x node_20
+        repo_key: https://deb.nodesource.com/gpgkey/nodesource.gpg
+        state: present
+    
+    - name: update cache
+      ansible.builtin.apt: 
+        update_cache: true
+
+    - name: Install Packages
+      ansible.builtin.apt: name={{ item }} update_cache=yes state=latest
+      loop: [ 'nginx', 'nodejs' ]
+
+    - name: start and enable nginx
+      ansible.builtin.service::
+        name: nginx
+        state: started
+        enabled: yes
+    
+    
+# Configure nginx and copy project
+
+    - name: Copy website files to the server's document root
+      ansible.builtin.copy:
+        src: "{{ app_root }}"
+        dest: "{{ document_root }}"
+        mode: preserve
+
+    - name: Comment line in nginx.conf
+      ansible.builtin.replace:
+        path: /etc/nginx/nginx.conf
+        regexp: '(.*include /etc/nginx/sites-enabled.*)'
+        replace: '#\1'
+
+    - name: Copy website files to the server's document root
+      ansible.builtin.copy:
+        src: "{{ app_root }}/node.sh"
+        dest: "{{ document_root }}"
+        mode: preserve
+
+    - name: Change the working directory and run script
+      ansible.builtin.shell: bash node.sh
+      args:
+        chdir: "{{ document_root }}"
+
+    - name: Sets Nginx conf file
+      ansible.builtin.template::
+        src: "nginx.conf.j2"
+        dest: "/etc/nginx/conf.d/nginx.conf"
+      notify: Reload Nginx
+
+# Handlers
+
+  handlers:
+    - name: Restart Nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
+      listen: "Reload Nginx"

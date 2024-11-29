@@ -1,0 +1,14 @@
+FROM node:alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install && npm install -g pm2
+
+FROM node:alpine
+WORKDIR /app
+COPY . .
+
+# If .env file exist
+COPY .env.dev_server .env   
+COPY --from=builder /app .
+EXPOSE 3000
+CMD ["pm2", "start", "index.js", "--name", "my-node-app"]
